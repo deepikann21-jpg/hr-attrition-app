@@ -1,6 +1,12 @@
 import streamlit as st
-import joblib
 import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import OneHotEncoder
+from imblearn.pipeline import Pipeline as ImbPipeline
+from imblearn.over_sampling import SMOTE
 
 # ── Page config ──────────────────────────────────────────────
 st.set_page_config(
@@ -9,12 +15,34 @@ st.set_page_config(
     layout="wide"
 )
 
-# ── Load model ───────────────────────────────────────────────
+# ── Train model from CSV ─────────────────────────────────────
 @st.cache_resource
-def load_model():
-    return joblib.load("attrition_pipeline.pkl")
+def train_model():
+    df = pd.read_csv("hr_data.csv")
 
-pipeline = load_model()
+    X = df.drop(columns=["Attrition"])
+    y = df["Attrition"].map({"Yes": 1, "No": 0}) if df["Attrition"].dtype == object else df["Attrition"]
+
+    categorical_cols = ["BusinessTravel", "Department", "EducationField",
+                        "Gender", "JobRole", "MaritalStatus", "OverTime"]
+    numerical_cols   = [c for c in X.columns if c not in categorical_cols]
+
+    preprocessor = ColumnTransformer(transformers=[
+        ("num", StandardScaler(), numerical_cols),
+        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols)
+    ])
+
+    pipeline = ImbPipeline(steps=[
+        ("preprocessor", preprocessor),
+        ("smote",         SMOTE(random_state=42)),
+        ("classifier",    RandomForestClassifier(random_state=42))
+    ])
+
+    pipeline.fit(X, y)
+    return pipeline
+
+with st.spinner("🔧 Training model, please wait..."):
+    pipeline = train_model()
 
 # ── Title ────────────────────────────────────────────────────
 st.title("👥 HR Attrition Predictor")
@@ -46,8 +74,8 @@ with col2:
                                 "Research Scientist", "Sales Executive",
                                 "Sales Representative"])
     job_level            = st.slider("Job Level", 1, 5, 2)
-    job_involvement      = st.slider("Job Involvement (1–4)", 1, 4, 3)
-    job_satisfaction     = st.slider("Job Satisfaction (1–4)", 1, 4, 3)
+    job_involvement      = st.slider("Job Involvement (1-4)", 1, 4, 3)
+    job_satisfaction     = st.slider("Job Satisfaction (1-4)", 1, 4, 3)
     business_travel      = st.selectbox("Business Travel", ["Non-Travel", "Travel_Frequently", "Travel_Rarely"])
     overtime             = st.selectbox("OverTime", ["No", "Yes"])
 
@@ -77,16 +105,13 @@ with col4:
 
 with col5:
     st.subheader("Satisfaction Scores")
-    environment_satisfaction  = st.slider("Environment Satisfaction (1–4)", 1, 4, 3)
-    relationship_satisfaction = st.slider("Relationship Satisfaction (1–4)", 1, 4, 3)
-    work_life_balance         = st.slider("Work Life Balance (1–4)", 1, 4, 3)
-    employee_count            = st.number_input("Employee Count", value=1, disabled=True)
+    environment_satisfaction  = st.slider("Environment Satisfaction (1-4)", 1, 4, 3)
+    relationship_satisfaction = st.slider("Relationship Satisfaction (1-4)", 1, 4, 3)
+    work_life_balance         = st.slider("Work Life Balance (1-4)", 1, 4, 3)
     employee_number           = st.number_input("Employee Number", min_value=1, value=1)
-    standard_hours            = st.number_input("Standard Hours", value=80, disabled=True)
 
 st.divider()
 
-# ── Build input dataframe — send RAW values, pipeline encodes internally ───
 def build_input():
     return pd.DataFrame([{
         "Age":                      age,
@@ -115,7 +140,6 @@ def build_input():
         "YearsInCurrentRole":       years_in_current_role,
         "YearsSinceLastPromotion":  years_since_last_promo,
         "YearsWithCurrManager":     years_with_curr_manager,
-        # Raw categorical columns — pipeline handles encoding
         "BusinessTravel":           business_travel,
         "Department":               department,
         "EducationField":           education_field,
@@ -125,7 +149,6 @@ def build_input():
         "OverTime":                 overtime,
     }])
 
-# ── Predict button ───────────────────────────────────────────
 if st.button("🔍 Predict Attrition", type="primary", use_container_width=True):
     input_df    = build_input()
     prediction  = pipeline.predict(input_df)[0]
