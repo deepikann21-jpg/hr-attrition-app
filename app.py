@@ -3,59 +3,37 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTE
 
-# ── Page config ──────────────────────────────────────────────
-st.set_page_config(
-    page_title="HR Attrition Predictor",
-    page_icon="👥",
-    layout="wide"
-)
+st.set_page_config(page_title="HR Attrition Predictor", page_icon="👥", layout="wide")
 
-# ── Train model from CSV ─────────────────────────────────────
 @st.cache_resource
 def train_model():
     df = pd.read_csv("hr_data.csv")
-
     X = df.drop(columns=["Attrition"])
-    y = df["Attrition"].map({"Yes": 1, "No": 0}) if df["Attrition"].dtype == object else df["Attrition"]
-
-    categorical_cols = ["BusinessTravel", "Department", "EducationField",
-                        "Gender", "JobRole", "MaritalStatus", "OverTime"]
-    numerical_cols   = [c for c in X.columns if c not in categorical_cols]
-
-    preprocessor = ColumnTransformer(transformers=[
-        ("num", StandardScaler(), numerical_cols),
-        ("cat", OneHotEncoder(handle_unknown="ignore"), categorical_cols)
-    ])
-
+    y = df["Attrition"]
     pipeline = ImbPipeline(steps=[
-        ("preprocessor", preprocessor),
-        ("smote",         SMOTE(random_state=42)),
-        ("classifier",    RandomForestClassifier(random_state=42))
+        ("scaler",     StandardScaler()),
+        ("smote",      SMOTE(random_state=42)),
+        ("classifier", RandomForestClassifier(random_state=42))
     ])
-
     pipeline.fit(X, y)
     return pipeline
 
 with st.spinner("🔧 Training model, please wait..."):
     pipeline = train_model()
 
-# ── Title ────────────────────────────────────────────────────
 st.title("👥 HR Attrition Predictor")
 st.markdown("Fill in the employee details below and click **Predict** to check attrition risk.")
 st.divider()
 
-# ── Input form ───────────────────────────────────────────────
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.subheader("Personal Info")
     age                  = st.slider("Age", 18, 60, 30)
-    gender               = st.selectbox("Gender", ["Female", "Male"])
+    gender_male          = st.selectbox("Gender", ["Female", "Male"])
     marital_status       = st.selectbox("Marital Status", ["Divorced", "Married", "Single"])
     education            = st.selectbox("Education Level", [1, 2, 3, 4, 5],
                                         format_func=lambda x: {1:"Below College",2:"College",3:"Bachelor",4:"Master",5:"Doctor"}[x])
@@ -114,39 +92,54 @@ st.divider()
 
 def build_input():
     return pd.DataFrame([{
-        "Age":                      age,
-        "DailyRate":                daily_rate,
-        "DistanceFromHome":         distance_from_home,
-        "Education":                education,
-        "EmployeeCount":            1,
-        "EmployeeNumber":           employee_number,
-        "EnvironmentSatisfaction":  environment_satisfaction,
-        "HourlyRate":               hourly_rate,
-        "JobInvolvement":           job_involvement,
-        "JobLevel":                 job_level,
-        "JobSatisfaction":          job_satisfaction,
-        "MonthlyIncome":            monthly_income,
-        "MonthlyRate":              monthly_rate,
-        "NumCompaniesWorked":       num_companies_worked,
-        "PercentSalaryHike":        percent_salary_hike,
-        "PerformanceRating":        performance_rating,
-        "RelationshipSatisfaction": relationship_satisfaction,
-        "StandardHours":            80,
-        "StockOptionLevel":         stock_option_level,
-        "TotalWorkingYears":        total_working_years,
-        "TrainingTimesLastYear":    training_times_last_year,
-        "WorkLifeBalance":          work_life_balance,
-        "YearsAtCompany":           years_at_company,
-        "YearsInCurrentRole":       years_in_current_role,
-        "YearsSinceLastPromotion":  years_since_last_promo,
-        "YearsWithCurrManager":     years_with_curr_manager,
-        "BusinessTravel":           business_travel,
-        "Department":               department,
-        "EducationField":           education_field,
-        "Gender":                   gender,
-        "JobRole":                  job_role,
-        "MaritalStatus":            marital_status,
-        "OverTime":                 overtime,
+        "Age":                                  age,
+        "DailyRate":                            daily_rate,
+        "DistanceFromHome":                     distance_from_home,
+        "Education":                            education,
+        "EmployeeCount":                        1,
+        "EmployeeNumber":                       employee_number,
+        "EnvironmentSatisfaction":              environment_satisfaction,
+        "HourlyRate":                           hourly_rate,
+        "JobInvolvement":                       job_involvement,
+        "JobLevel":                             job_level,
+        "JobSatisfaction":                      job_satisfaction,
+        "MonthlyIncome":                        monthly_income,
+        "MonthlyRate":                          monthly_rate,
+        "NumCompaniesWorked":                   float(num_companies_worked),
+        "PercentSalaryHike":                    percent_salary_hike,
+        "PerformanceRating":                    performance_rating,
+        "RelationshipSatisfaction":             relationship_satisfaction,
+        "StandardHours":                        80,
+        "StockOptionLevel":                     float(stock_option_level),
+        "TotalWorkingYears":                    float(total_working_years),
+        "TrainingTimesLastYear":                float(training_times_last_year),
+        "WorkLifeBalance":                      work_life_balance,
+        "YearsAtCompany":                       years_at_company,
+        "YearsInCurrentRole":                   float(years_in_current_role),
+        "YearsSinceLastPromotion":              float(years_since_last_promo),
+        "YearsWithCurrManager":                 float(years_with_curr_manager),
+        # One-hot encoded columns
+        "BusinessTravel_Travel_Frequently":     business_travel == "Travel_Frequently",
+        "BusinessTravel_Travel_Rarely":         business_travel == "Travel_Rarely",
+        "Department_Research & Development":    department == "Research & Development",
+        "Department_Sales":                     department == "Sales",
+        "EducationField_Life Sciences":         education_field == "Life Sciences",
+        "EducationField_Marketing":             education_field == "Marketing",
+        "EducationField_Medical":               education_field == "Medical",
+        "EducationField_Other":                 education_field == "Other",
+        "EducationField_Technical Degree":      education_field == "Technical Degree",
+        "Gender_Male":                          gender_male == "Male",
+        "JobRole_Human Resources":              job_role == "Human Resources",
+        "JobRole_Laboratory Technician":        job_role == "Laboratory Technician",
+        "JobRole_Manager":                      job_role == "Manager",
+        "JobRole_Manufacturing Director":       job_role == "Manufacturing Director",
+        "JobRole_Research Director":            job_role == "Research Director",
+        "JobRole_Research Scientist":           job_role == "Research Scientist",
+        "JobRole_Sales Executive":              job_role == "Sales Executive",
+        "JobRole_Sales Representative":         job_role == "Sales Representative",
+        "MaritalStatus_Married":                marital_status == "Married",
+        "MaritalStatus_Single":                 marital_status == "Single",
+        "OverTime_Yes":                         overtime == "Yes",
     }])
 
 if st.button("🔍 Predict Attrition", type="primary", use_container_width=True):
